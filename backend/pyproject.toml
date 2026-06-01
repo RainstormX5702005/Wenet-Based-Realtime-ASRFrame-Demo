@@ -1,0 +1,32 @@
+[project]
+name = "real-time-asr"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.109.0",
+    "flake8>=7.0.0",
+    "noisereduce",
+    "numpy>=1.24.0",
+    "pytest>=8.0.0",
+    "python-multipart",
+    "pyyaml",
+    "scipy",
+    "silero-vad>=6.2.1",
+    "sounddevice>=0.5.5",
+    "soundfile",
+    "torch>=2.0.0",
+    "torchaudio>=2.0.0",
+    "uvicorn[standard]>=0.27.0",
+    "websockets>=12.0",
+    "wenet",
+]
+
+[tool.uv.sources]
+wenet = { path = "wenet", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that load local model artifacts or run slower integration paths",
+]
