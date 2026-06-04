@@ -15,6 +15,7 @@ from preprocess import (
     StreamingVadSegmenter,
     RmsNormalizer,
     AudioPeakLimiter,
+    load_vad_model,
 )
 from transcription import (
     TranscriberFactoryConfig,
@@ -38,7 +39,6 @@ async def lifespan(app: FastAPI):
     await asr_logger.start()
     app.state.asr_logger = asr_logger
     transcriber = None
-
     try:
         transcriber = create_transcriber(
             TranscriberFactoryConfig(
@@ -51,6 +51,7 @@ async def lifespan(app: FastAPI):
         )
         app.state.transcriber = transcriber
         asr_logger.record_event("transcriber_ready", backend="wenet")
+        app.state.model = load_vad_model()
 
         yield
     finally:
@@ -70,7 +71,9 @@ async def websocket_endpoint(ws: WebSocket):
     preprocess = PreprocessPipeline(
         [
             DCRemover(),
-            StreamingVadSegmenter(sample_rate=SAMPLE_RATE, chunk_size=CHUNK_SIZE),
+            StreamingVadSegmenter(
+                sample_rate=SAMPLE_RATE, chunk_size=CHUNK_SIZE, model=app.state.model
+            ),
             RmsNormalizer(),
             AudioPeakLimiter(),
         ]

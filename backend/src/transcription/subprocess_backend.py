@@ -168,7 +168,10 @@ class SubprocessTranscriber:
             self._process.wait(timeout=self.config.close_timeout_s)
         except subprocess.TimeoutExpired:
             self._process.kill()
-            self._process.wait(timeout=self.config.close_timeout_s)
+            try:
+                self._process.wait(timeout=self.config.close_timeout_s)
+            except subprocess.TimeoutExpired:
+                pass
 
     def _drain_stderr(self) -> None:
         if self._process.stderr is None:

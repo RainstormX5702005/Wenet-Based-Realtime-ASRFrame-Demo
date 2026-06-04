@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from fastapi import FastAPI
 
@@ -41,10 +43,19 @@ def test_lifespan_cleans_up_logger_and_transcriber_when_vad_load_fails(
     monkeypatch.setattr(web_server, "load_vad_model", fail_vad_load)
 
     app = FastAPI()
-    manager = web_server.lifespan(app)
+
+    async def run():
+        # Use the raw async generator so we can aclose() it manually
+        # when __anext__() raises before yield, triggering finally.
+        gen = web_server.lifespan.__wrapped__(app)
+        try:
+            await gen.__anext__()
+        except RuntimeError:
+            await gen.aclose()
+            raise
 
     with pytest.raises(RuntimeError, match="vad failed"):
-        manager.__aenter__().send(None)
+        asyncio.run(run())
 
     assert "logger_start" in events
     assert "transcriber_close" in events

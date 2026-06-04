@@ -35,7 +35,7 @@ class StreamingVadSegmenter:
         self.config = config or StreamingVadConfig()
         self.sample_rate = sample_rate
         self.chunk_size = chunk_size
-        self.model = model or load_silero_vad()
+        self.model = model
         self.vad_iter = VADIterator(
             self.model,
             threshold=self.config.threshold,
@@ -45,7 +45,9 @@ class StreamingVadSegmenter:
         self._speaking = False
         self._audio_chunks: list[np.ndarray] = []
         self._prev_chunks: list[np.ndarray] = []
-        self._prev_max = int(self.config.pre_speech_ms * sample_rate / 1000 / chunk_size)
+        self._prev_max = int(
+            self.config.pre_speech_ms * sample_rate / 1000 / chunk_size
+        )
 
     def process(self, data: AudioData) -> AudioData | None:
         if data.samples.size != self.chunk_size:
@@ -80,3 +82,8 @@ class StreamingVadSegmenter:
             reason="accepted",
             metadata=dict(data.metadata),
         )
+
+
+def load_vad_model():
+    """Loads the Silero VAD model."""
+    return load_silero_vad()

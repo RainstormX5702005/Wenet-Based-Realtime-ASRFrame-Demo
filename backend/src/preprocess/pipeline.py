@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-from silero_vad import load_silero_vad
 from preprocess.steps.base import PreprocessStep
 from preprocess.steps.registry import is_registered
 from preprocess.types import AudioData
@@ -42,12 +41,10 @@ class PreprocessPipeline:
         Args:
             steps: Ordered preprocess steps. If ``None``, a default chain is used.
             config: Optional pipeline configuration.
-            vad_model: Shared Silero model instance for VAD step.
         """
 
         self.steps: list[PreprocessStep] = steps or []
         self.config = config or PreprocessConfig()
-        self.vad_model = load_silero_vad()
         self._validate_steps(self.steps)
 
     @staticmethod
@@ -74,7 +71,7 @@ class PreprocessPipeline:
     def process(self, data: AudioData) -> AudioData | None:
         """Runs an ``AudioData`` payload through all configured steps."""
 
-        if self.steps is []:
+        if not self.steps:
             return data
 
         for step in self.steps:

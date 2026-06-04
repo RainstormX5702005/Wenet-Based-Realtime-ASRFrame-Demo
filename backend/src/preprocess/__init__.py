@@ -13,6 +13,7 @@ from preprocess.steps import (
     RmsNormalizerConfig,
     StreamingVadSegmenter,
     StreamingVadConfig,
+    load_vad_model,
 )
 from preprocess.steps.base import PreprocessStep
 from preprocess.steps.registry import (
@@ -41,4 +42,5 @@ __all__ = [
     "RmsNormalizerConfig",
     "StreamingVadSegmenter",
     "StreamingVadConfig",
+    "load_vad_model",
 ]

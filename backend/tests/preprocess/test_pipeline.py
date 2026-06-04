@@ -67,30 +67,10 @@ def test_pipeline_rejects_duplicates_without_registry():
         PreprocessPipeline(steps=[DCRemover(), DCRemover()])
 
 
-def test_default_pipeline_has_expected_order_by_contract():
-    class DummyVadSegmenter:
-        def __init__(
-            self,
-            sample_rate: int,
-            chunk_size: int,
-            model: object | None = None,
-            config=None,
-        ):
-            self.sample_rate = sample_rate
-            self.chunk_size = chunk_size
-            self.model = model
-            self.config = config
-
-        def process(self, data):
-            return data
-
-    # Avoid touching silero in tests while still verifying constructor defaults.
-    with patch.object(preprocess.pipeline, "StreamingVadSegmenter", DummyVadSegmenter), patch.object(
-        preprocess.pipeline, "is_registered", lambda _step: True
-    ):
-        pipeline = PreprocessPipeline(steps=None, vad_model=object())
-    assert pipeline.default_step_names[0] == "DCRemover"
-    assert pipeline.default_step_names[1] == "DummyVadSegmenter"
+def test_default_pipeline_is_empty_when_steps_not_provided():
+    pipeline = PreprocessPipeline(steps=None)
+    assert pipeline.steps == []
+    assert pipeline.default_step_names == []
 
 
 def test_validate_segment_rejects_short_segments():

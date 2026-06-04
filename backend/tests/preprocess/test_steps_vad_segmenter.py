@@ -7,7 +7,7 @@ import numpy as np
 from preprocess.steps.vad_streamer import StreamingVadSegmenter
 
 
-def test_vad_segmenter_loads_model_when_not_provided(monkeypatch):
+def test_vad_segmenter_accepts_none_model_without_loading(monkeypatch):
     calls = {"count": 0}
 
     def fake_load_silero_vad():
@@ -25,7 +25,7 @@ def test_vad_segmenter_loads_model_when_not_provided(monkeypatch):
     from preprocess.types import AudioData
 
     seg.process(AudioData(samples=np.zeros(4, dtype=np.float32), sample_rate=16000))
-    assert calls["count"] == 1
+    assert calls["count"] == 0
 
 
 def test_vad_segmenter_emits_segment_on_end(monkeypatch):
