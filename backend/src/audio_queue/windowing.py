@@ -13,7 +13,7 @@ import time
 import numpy as np
 
 from audio_queue.task import AudioTask
-from preprocess import PreparedSegment
+from preprocess.types import AudioData
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class WindowingConfig:
 
 
 def build_audio_tasks(
-    segment: PreparedSegment,
+    segment: AudioData,
     segment_id: int,
     config: WindowingConfig | None = None,
 ) -> list[AudioTask]:
@@ -47,7 +47,7 @@ def build_audio_tasks(
         One or more audio tasks in playback order.
     """
 
-    if not segment.accepted or segment.audio.size == 0:
+    if not segment.accepted or segment.samples.size == 0:
         return []
 
     window_config = config or WindowingConfig()
@@ -57,12 +57,12 @@ def build_audio_tasks(
     min_samples = int(sample_rate * window_config.min_window_duration_ms / 1000)
 
     # 音频长度不高于一个窗口是可以直接切分的，不需要考虑重叠
-    if segment.audio.size <= window_samples:
+    if segment.samples.size <= window_samples:
         return [
             AudioTask(
                 segment_id=segment_id,
                 window_index=0,
-                audio=segment.audio.astype(np.float32, copy=False),
+                audio=segment.samples.astype(np.float32, copy=False),
                 sample_rate=sample_rate,
                 is_final_window=True,
                 created_at=time.monotonic(),
@@ -72,15 +72,15 @@ def build_audio_tasks(
     tasks: list[AudioTask] = []
     start = 0
     window_index = 0
-    while start < segment.audio.size:
-        end = min(start + window_samples, segment.audio.size)
-        chunk = segment.audio[start:end]
+    while start < segment.samples.size:
+        end = min(start + window_samples, segment.samples.size)
+        chunk = segment.samples[start:end]
         if chunk.size < min_samples:
             break
 
         next_start = start + step_samples
         is_final = (
-            end >= segment.audio.size or segment.audio.size - next_start < min_samples
+            end >= segment.samples.size or segment.samples.size - next_start < min_samples
         )
         tasks.append(
             AudioTask(

@@ -1,9 +1,8 @@
 """Speech segment preprocessing pipeline.
 
-The pipeline owns VAD-adjacent audio preparation: it validates completed
-speech segments, applies conservative enhancement, and returns prepared
-segments for downstream queueing.  It does not own queueing, windowing,
-or Wenet calls.
+The pipeline owns all preprocessing details including VAD-based segmentation
+and enhancement/validation steps.  The public entrypoint is a shared
+`process` method that forwards an ``AudioData`` payload through ordered steps.
 """
 
 from __future__ import annotations
@@ -11,126 +10,132 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 import numpy as np
-
-from preprocess.audio_enhance import AudioEnhanceConfig, AudioEnhancer
+from silero_vad import load_silero_vad
+from preprocess.steps.base import PreprocessStep
+from preprocess.steps.registry import is_registered
+from preprocess.types import AudioData
 from utils.audio_utils import rms_db
 
 
 @dataclass(frozen=True)
 class PreprocessConfig:
-    """Configuration for VAD-adjacent speech preprocessing.
-
-    Attributes:
-        sample_rate: Audio sample rate in Hz.
-        chunk_size: Number of samples per incoming chunk.
-        min_speech_duration_ms: Minimum accepted speech segment duration.
-        min_active_rms_db: Minimum RMS level accepted as useful audio.
-        target_rms_db: Target RMS level passed to the enhancer.
-        noise_reduce_enabled: Whether to run conservative noise reduction.
-    """
+    """Runtime defaults used by composed preprocess steps."""
 
     sample_rate: int = 16000
     chunk_size: int = 512
-    min_speech_duration_ms: int = 250
+    min_speech_duration_ms: float = 250.0
     min_active_rms_db: float = -45.0
     target_rms_db: float = -23.0
     noise_reduce_enabled: bool = True
 
 
-@dataclass(frozen=True)
-class PreparedSegment:
-    """Preprocessed segment emitted to the audio_queue module.
-
-    Attributes:
-        accepted: Whether the segment should be queued for transcription.
-        reason: Decision reason for diagnostics.
-        audio: Enhanced mono float32 audio, empty when rejected.
-        sample_rate: Audio sample rate in Hz.
-        duration_ms: Segment duration in milliseconds.
-        rms_db: Original segment RMS level in dB.
-    """
-
-    accepted: bool
-    reason: str
-    audio: np.ndarray
-    sample_rate: int
-    duration_ms: float
-    rms_db: float
-
-
-def recommended_vad_kwargs() -> dict[str, float | int]:
-    """Returns Silero VAD defaults for the MVP pipeline."""
-
-    return {
-        "threshold": 0.35,
-        "min_silence_duration_ms": 120,
-        "speech_pad_ms": 40,
-    }
-
-
 class PreprocessPipeline:
-    """Validates and enhances completed speech segments."""
+    """Executes a caller-defined ordered list of preprocess steps."""
 
-    def __init__(self, config: PreprocessConfig | None = None):
-        """Initializes the preprocessing pipeline.
+    def __init__(
+        self,
+        steps: list[PreprocessStep],
+        config: PreprocessConfig | None = None,
+    ):
+        """Initializes the pipeline and validates step contracts.
 
         Args:
-            config: Optional preprocessing configuration.
+            steps: Ordered preprocess steps. If ``None``, a default chain is used.
+            config: Optional pipeline configuration.
+            vad_model: Shared Silero model instance for VAD step.
         """
 
+        self.steps: list[PreprocessStep] = steps or []
         self.config = config or PreprocessConfig()
-        self.vad_kwargs = recommended_vad_kwargs()
-        self.enhancer = AudioEnhancer(
-            AudioEnhanceConfig(
-                sample_rate=self.config.sample_rate,
-                target_rms_db=self.config.target_rms_db,
-                noise_reduce_enabled=self.config.noise_reduce_enabled,
-            )
-        )
+        self.vad_model = load_silero_vad()
+        self._validate_steps(self.steps)
 
-    def process_segment(
+    @staticmethod
+    def _validate_steps(steps: list[PreprocessStep]) -> None:
+        """Fails fast when any step violates the public contract."""
+
+        seen: set[str] = set()
+        for step in steps:
+            process = getattr(step, "process", None)
+            if not callable(process):
+                raise TypeError(
+                    f"Invalid preprocess step {step!r}: missing callable process()"
+                )
+            if not is_registered(step):
+                raise TypeError(
+                    f"Invalid preprocess step {type(step).__name__}: unregistered"
+                )
+
+            step_name = type(step).__name__
+            if step_name in seen:
+                raise ValueError(f"Duplicate preprocess step detected: {step_name}")
+            seen.add(step_name)
+
+    def process(self, data: AudioData) -> AudioData | None:
+        """Runs an ``AudioData`` payload through all configured steps."""
+
+        if self.steps is []:
+            return data
+
+        for step in self.steps:
+            if not data.accepted:
+                return data
+
+            result = step.process(data)
+            if result is None:
+                return None
+            if result.accepted is False:
+                return result
+
+            data = result
+        return data
+
+    def process_chunk(
         self,
         samples: np.ndarray,
         noise_reference: np.ndarray | None = None,
-    ) -> PreparedSegment:
-        """Validates and enhances one completed speech segment.
+        metadata: dict | None = None,
+    ) -> AudioData | None:
+        """Constructs ``AudioData`` and runs one incoming chunk."""
 
-        Args:
-            samples: Raw mono float audio from VAD start to VAD end.
-            noise_reference: Optional non-speech audio before the segment.
+        data = AudioData(
+            samples=np.asarray(samples, dtype=np.float32),
+            sample_rate=self.config.sample_rate,
+            noise_reference=noise_reference,
+            metadata=metadata or {},
+        )
+        return self.process(data)
 
-        Returns:
-            Prepared segment for downstream queueing.
-        """
+    def validate_segment(self, data: AudioData) -> AudioData:
+        """Validates completed segment metadata before downstream queueing."""
 
-        audio = np.asarray(samples, dtype=np.float32)
-        duration_ms = audio.size / self.config.sample_rate * 1000.0
-        level_db = rms_db(audio)
+        if not data.accepted:
+            return data
+
+        duration_ms = data.samples.size / self.config.sample_rate * 1000.0
+        level_db = rms_db(data.samples)
 
         if duration_ms < self.config.min_speech_duration_ms:
-            return self._reject("too_short", duration_ms, level_db)
+            data.accepted = False
+            data.reason = "too_short"
+            data.samples = np.array([], dtype=np.float32)
+            return data
 
         if level_db < self.config.min_active_rms_db:
-            return self._reject("too_quiet", duration_ms, level_db)
+            data.accepted = False
+            data.reason = "too_quiet"
+            data.samples = np.array([], dtype=np.float32)
+            return data
 
-        enhanced = self.enhancer.enhance(audio, noise_reference=noise_reference)
-        return PreparedSegment(
-            accepted=True,
-            reason="accepted",
-            audio=enhanced,
-            sample_rate=self.config.sample_rate,
-            duration_ms=duration_ms,
-            rms_db=level_db,
-        )
+        data.reason = "accepted"
+        return data
 
-    def _reject(self, reason: str, duration_ms: float, level_db: float) -> PreparedSegment:
-        """Builds a rejected segment result with empty audio."""
+    @property
+    def default_step_names(self) -> list[str]:
+        return [type(step).__name__ for step in self.steps]
 
-        return PreparedSegment(
-            accepted=False,
-            reason=reason,
-            audio=np.array([], dtype=np.float32),
-            sample_rate=self.config.sample_rate,
-            duration_ms=duration_ms,
-            rms_db=level_db,
-        )
+
+__all__ = [
+    "PreprocessConfig",
+    "PreprocessPipeline",
+]

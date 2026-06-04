@@ -1,13 +1,44 @@
 """Preprocessing package public exports."""
 
-from preprocess.audio_enhance import AudioEnhanceConfig, AudioEnhancer
-from preprocess.pipeline import PreparedSegment, PreprocessConfig, PreprocessPipeline, recommended_vad_kwargs
+from preprocess.pipeline import PreprocessConfig, PreprocessPipeline
+from preprocess.steps import (
+    DCRemover,
+    NoiseReducer,
+    NoiseReducerConfig,
+    AudioPeakLimiter,
+    PeakLimiterConfig,
+    PreEmphasis,
+    PreEmphasisConfig,
+    RmsNormalizer,
+    RmsNormalizerConfig,
+    StreamingVadSegmenter,
+    StreamingVadConfig,
+)
+from preprocess.steps.base import PreprocessStep
+from preprocess.steps.registry import (
+    REGISTERED_STEP_TYPES,
+    is_registered,
+    register_step,
+)
+from preprocess.types import AudioData
 
 __all__ = [
-    "AudioEnhanceConfig",
-    "AudioEnhancer",
-    "PreparedSegment",
     "PreprocessConfig",
     "PreprocessPipeline",
-    "recommended_vad_kwargs",
+    "PreprocessStep",
+    "REGISTERED_STEP_TYPES",
+    "is_registered",
+    "register_step",
+    "AudioData",
+    "DCRemover",
+    "NoiseReducer",
+    "NoiseReducerConfig",
+    "AudioPeakLimiter",
+    "PeakLimiterConfig",
+    "PreEmphasis",
+    "PreEmphasisConfig",
+    "RmsNormalizer",
+    "RmsNormalizerConfig",
+    "StreamingVadSegmenter",
+    "StreamingVadConfig",
 ]

@@ -6,11 +6,16 @@ import numpy as np
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
-from silero_vad import VADIterator, load_silero_vad
 
 from asr_logging import AsrLogConfig, AsrResultLogger
 from audio_queue import AudioTaskQueue, build_audio_tasks
-from preprocess import PreprocessPipeline
+from preprocess import (
+    PreprocessPipeline,
+    DCRemover,
+    StreamingVadSegmenter,
+    RmsNormalizer,
+    AudioPeakLimiter,
+)
 from transcription import (
     TranscriberFactoryConfig,
     TranscriptionWorker,
@@ -20,8 +25,6 @@ from transcription import (
 CHANNELS = 1
 SAMPLE_RATE = 16000
 CHUNK_SIZE = 512
-# 300 ms pre-speech buffer gives Wenet more lead-in context.
-PREV_CHUNKS = int(0.3 * SAMPLE_RATE / CHUNK_SIZE)
 
 SRC_DIR = Path(__file__).resolve().parent
 MODEL_DIR = SRC_DIR.parent / "models"
@@ -49,9 +52,6 @@ async def lifespan(app: FastAPI):
         app.state.transcriber = transcriber
         asr_logger.record_event("transcriber_ready", backend="wenet")
 
-        app.state.vad_model = load_silero_vad()
-        asr_logger.record_event("vad_ready")
-
         yield
     finally:
         if transcriber is not None:
@@ -67,8 +67,14 @@ app = FastAPI(lifespan=lifespan)
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
 
-    preprocess = PreprocessPipeline()
-    vad_iter = VADIterator(ws.app.state.vad_model, **preprocess.vad_kwargs)
+    preprocess = PreprocessPipeline(
+        [
+            DCRemover(),
+            StreamingVadSegmenter(sample_rate=SAMPLE_RATE, chunk_size=CHUNK_SIZE),
+            RmsNormalizer(),
+            AudioPeakLimiter(),
+        ]
+    )
     task_queue = AudioTaskQueue()
     worker = TranscriptionWorker(task_queue, ws.app.state.transcriber)
 
@@ -88,9 +94,6 @@ async def websocket_endpoint(ws: WebSocket):
             await ws.send_text(result.text)
 
     worker_task = asyncio.create_task(worker.run(send_result))
-    audio_chunks = []
-    prev_audio_chunks = []
-    speaking = False
     segment_id = 0
 
     try:
@@ -101,36 +104,17 @@ async def websocket_endpoint(ws: WebSocket):
             if len(samples) != CHUNK_SIZE:
                 continue
 
-            speech_dict = vad_iter(samples)
+            prepared = preprocess.process_chunk(samples)
+            if prepared is None:
+                continue
 
-            if speech_dict:
-                if not speaking and "start" in speech_dict:
-                    speaking = True
+            prepared = preprocess.validate_segment(prepared)
+            if not prepared.accepted:
+                continue
 
-            if speaking:
-                audio_chunks.append(samples)
-            else:
-                prev_audio_chunks.append(samples)
-                if len(prev_audio_chunks) > PREV_CHUNKS:
-                    prev_audio_chunks.pop(0)
-
-            if speech_dict and "end" in speech_dict:
-                speaking = False
-                raw_audio = np.concatenate(prev_audio_chunks + audio_chunks)
-                noise_reference = None
-                if prev_audio_chunks:
-                    noise_reference = np.concatenate(prev_audio_chunks)
-                audio_chunks = []
-
-                prepared = preprocess.process_segment(
-                    raw_audio, noise_reference=noise_reference
-                )
-                if not prepared.accepted:
-                    continue
-
-                for task in build_audio_tasks(prepared, segment_id=segment_id):
-                    await task_queue.push(task)
-                segment_id += 1
+            for task in build_audio_tasks(prepared, segment_id=segment_id):
+                await task_queue.push(task)
+            segment_id += 1
 
     except WebSocketDisconnect:
         pass
@@ -151,4 +135,4 @@ app.mount(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=6975)
+    uvicorn.run(app, host="0.0.0.0", port=1557)

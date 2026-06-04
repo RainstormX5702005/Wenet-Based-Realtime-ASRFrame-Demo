@@ -38,7 +38,7 @@ def test_lifespan_cleans_up_logger_and_transcriber_when_vad_load_fails(
     def fail_vad_load():
         raise RuntimeError("vad failed")
 
-    monkeypatch.setattr(web_server, "load_silero_vad", fail_vad_load)
+    monkeypatch.setattr(web_server, "load_vad_model", fail_vad_load)
 
     app = FastAPI()
     manager = web_server.lifespan(app)
