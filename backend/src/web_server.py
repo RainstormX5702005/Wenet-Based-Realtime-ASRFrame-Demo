@@ -31,6 +31,7 @@ SRC_DIR = Path(__file__).resolve().parent
 MODEL_DIR = SRC_DIR.parent / "models"
 SCRIPT_DIR = SRC_DIR.parent / "scripts"
 LOG_DIR = SRC_DIR.parent / "logs"
+PROJECT_DIR = SRC_DIR.parent.parent
 
 
 @asynccontextmanager
@@ -127,7 +128,7 @@ async def websocket_endpoint(ws: WebSocket):
             await worker_task
 
 
-static_dir = SRC_DIR / "static"
+static_dir = PROJECT_DIR / "frontend" / "dist"
 app.mount(
     "/",
     StaticFiles(directory=str(static_dir), html=True),
