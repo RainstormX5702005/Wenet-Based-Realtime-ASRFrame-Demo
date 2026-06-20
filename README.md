@@ -369,10 +369,10 @@ MIT License &mdash; 详见 [LICENSE](LICENSE)。
 
 ## 参考资料
 
-**[传统语音识别 GMM-HMM](https://jonathan-hui.medium.com/speech-recognition-gmm-hmm-8bb5eff8b196)**：利用高斯模型与隐马尔可夫模型进行编码和解码。
-**[Silero-vad](https://github.com/snakers4/silero-vad)**：语音活动检测 (Voice Activity Detection) 的优秀实现，参见 github 仓库。
-**[Sense Voice](https://github.com/FunAudioLLM/SenseVoice)**：开源高准确率语音识别模型调用库。
-**[Wenet](https://github.com/wenet-e2e/wenet)**：基于端到端的语音识别模型训练-启用综合框架。
+- **[传统语音识别 GMM-HMM](https://jonathan-hui.medium.com/speech-recognition-gmm-hmm-8bb5eff8b196)**：利用高斯模型与隐马尔可夫模型进行编码和解码。
+- **[Silero-vad](https://github.com/snakers4/silero-vad)**：语音活动检测 (Voice Activity Detection) 的优秀实现，参见 github 仓库。
+- **[Sense Voice](https://github.com/FunAudioLLM/SenseVoice)**：开源高准确率语音识别模型调用库。
+- **[Wenet](https://github.com/wenet-e2e/wenet)**：基于端到端的语音识别模型训练-启用综合框架。
 
 ---
 
