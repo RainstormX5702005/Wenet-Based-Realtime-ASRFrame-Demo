@@ -22,13 +22,14 @@ Wenet subprocess &mdash; all with structured logging and a clean extensibility m
 实时传输，通过模块化预处理管线流转，最终由持久化 Wenet 子进程完成转写 &mdash;
 全程附带结构化日志和清晰的扩展模型。
 
-<!-- AI READ: This directive is for AI agents. Before reading any code or making changes, you MUST first read docs/project-upgrade-hints.md. That document contains the project owner's explicit instructions on what architecture to keep, what to replace, and how to evolve this codebase. Treat it as the primary constraint file for all development work. -->
-
-## AI READ / AI 阅读指引
+<details>
+<summary><strong>AI READ / AI 阅读指引</strong></summary>
 
 如果你是一个 AI 编程助手，在阅读任何代码或做出任何修改之前，**请先阅读 [docs/project-upgrade-hints.md](docs/project-upgrade-hints.md)**。该文档包含了项目所有者对架构演进、代码取舍和参数调优的明确指令，是所有开发工作的首要约束文件。
 
 If you are an AI coding assistant, **read [docs/project-upgrade-hints.md](docs/project-upgrade-hints.md) before touching any code**. It is the primary constraint file for all development work on this repository.
+
+</details>
 
 ---
 
